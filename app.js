@@ -5,64 +5,68 @@ var express = require('express')
   , io = require('socket.io').listen(server);
 
 server.listen(8080);
-
-// routing
-app.get('/', function (req, res) {
-  res.sendfile(__dirname + '/index.html');
-});
-
 // usernames which are currently connected to the chat
 var usernames = {};
-
 // rooms which are currently available in chat
-var rooms = ['room1','room2','room3'];
+var rooms = [];
+    io.sockets.on('connection', function (socket) {
+	    console.log('============  connected from client =========')
+	    socket.on('join_to_room', function(data){
+		// remove the username from global usernames list
+		socket.join(data.id);
+		socket.emit('joiningstatus', 'successfully joined into');
+	});
 
-io.sockets.on('connection', function (socket) {
-	
-	// when the client emits 'adduser', this listens and executes
-	socket.on('adduser', function(username){
+	socket.on('send_message', function(data){
+	    socket.broadcast.to(data.receiverid).emit('receive_messages', {
+          'message': data.message,
+          'senderid':data.senderid,
+          'receiverid':data.receiverid
+         });
+	});
+
+    socket.on('friend_request_sent', function(data){
+        console.log('friend request notification got=============== ');
+        console.log(data);
+	socket.broadcast.to(data.id).emit('friend_notification', {'status': 'true' });
+    });
+
+	socket.on('connecting', function (data) {
 		// store the username in the socket session for this client
-		socket.username = username;
+		socket.username = data.id;
 		// store the room name in the socket session for this client
-		socket.room = 'room1';
+		socket.room = data.id;
 		// add the client's username to the global list
-		usernames[username] = username;
+		usernames[data.id] = data.id;
 		// send client to room 1
-		socket.join('room1');
+		socket.join(data.id);
 		// echo to client they've connected
-		socket.emit('updatechat', 'SERVER', 'you have connected to room1');
-		// echo to room 1 that a person has connected to their room
-		socket.broadcast.to('room1').emit('updatechat', 'SERVER', username + ' has connected to this room');
-		socket.emit('updaterooms', rooms, 'room1');
+		socket.broadcast.to(data.id).emit('updatechat', 'SERVER', data.id + ' has connected to this room');
+
+        var data = [];
+        var all_rooms = [];
+		ns = io.of("/");    // the default namespace is "/"
+        if (ns) {
+            for (var id in ns.connected) {
+                    data.push(ns.connected[id]);
+            }
+        }
+	    for(temp in data){
+	        all_rooms.push(data[temp].username);
+	    }
+
+	    socket.emit('avaiblerooms', all_rooms);
 	});
-	
-	// when the client emits 'sendchat', this listens and executes
-	socket.on('sendchat', function (data) {
-		// we tell the client to execute 'updatechat' with 2 parameters
-		io.sockets.in(socket.room).emit('updatechat', socket.username, data);
-	});
-	
-	socket.on('switchRoom', function(newroom){
-		socket.leave(socket.room);
-		socket.join(newroom);
-		socket.emit('updatechat', 'SERVER', 'you have connected to '+ newroom);
-		// sent message to OLD room
-		socket.broadcast.to(socket.room).emit('updatechat', 'SERVER', socket.username+' has left this room');
-		// update socket session room title
-		socket.room = newroom;
-		socket.broadcast.to(newroom).emit('updatechat', 'SERVER', socket.username+' has joined this room');
-		socket.emit('updaterooms', rooms, newroom);
-	});
-	
 
 	// when the user disconnects.. perform this
 	socket.on('disconnect', function(){
 		// remove the username from global usernames list
 		delete usernames[socket.username];
 		// update list of users in chat, client-side
-		io.sockets.emit('updateusers', usernames);
+		//io.sockets.emit('updateusers', usernames);
 		// echo globally that this client has left
-		socket.broadcast.emit('updatechat', 'SERVER', socket.username + ' has disconnected');
+		//socket.broadcast.emit('updatechat', 'SERVER', socket.username + ' has disconnected');
 		socket.leave(socket.room);
+		console.log('user disconnected', socket.username)
 	});
 });
