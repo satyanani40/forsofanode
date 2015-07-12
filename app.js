@@ -5,6 +5,7 @@ var express = require('express')
   , io = require('socket.io').listen(server);
 
 server.listen(8080);
+console.log(" app is runnig");
 // usernames which are currently connected to the chat
 var usernames = {};
 // rooms which are currently available in chat
@@ -18,10 +19,13 @@ var rooms = [];
 	});
 
 	socket.on('send_message', function(data){
-	    socket.broadcast.to(data.receiverid).emit('receive_messages', {
+
+	    console.log('message sending----')
+	    socket.broadcast.to(data.receiver_id).emit('receive_messages', {
           'message': data.message,
-          'senderid':data.senderid,
-          'receiverid':data.receiverid
+          'receiver_id': data.receiver_id,
+          'sender_id': data.sender_id,
+          'created_date':  new Date()
          });
 	});
 
